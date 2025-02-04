@@ -1,0 +1,48 @@
+\documentclass{article}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+
+\begin{document}
+
+\section*{Problems}
+\begin{enumerate}
+\item $\displaystyle \lim_{x \to \infty} \frac{2x^3-4x+1}{x^3+5}$
+\item $\displaystyle \lim_{x \to -\infty} -3x^4 + 8x^2 - 2x + 4$
+\item $\displaystyle \lim_{x \to \infty} 2e^{-3x} - 4(2^x)$
+\end{enumerate}
+
+
+\section*{Solutions}
+Let me solve these limits step by step.
+
+1) $\displaystyle \lim_{x \to \infty} \frac{2x^3-4x+1}{x^3+5}$
+
+For rational functions as x approaches infinity, we can divide both numerator and denominator by the highest power of x that appears (in this case, $x^3$).
+
+$\displaystyle \lim_{x \to \infty} \frac{2x^3-4x+1}{x^3+5} = \lim_{x \to \infty} \frac{\frac{2x^3}{x^3}-\frac{4x}{x^3}+\frac{1}{x^3}}{\frac{x^3}{x^3}+\frac{5}{x^3}}$
+
+$\displaystyle = \lim_{x \to \infty} \frac{2-\frac{4}{x^2}+\frac{1}{x^3}}{1+\frac{5}{x^3}}$
+
+As $x \to \infty$, all terms with x in denominator approach 0.
+Therefore, $\displaystyle \lim_{x \to \infty} \frac{2x^3-4x+1}{x^3+5} = 2$
+
+2) $\displaystyle \lim_{x \to -\infty} -3x^4 + 8x^2 - 2x + 4$
+
+For polynomial functions as x approaches infinity or negative infinity:
+- The term with the highest degree determines the behavior
+- If x approaches negative infinity and highest power is even, result is positive infinity
+
+Here, highest power is 4 (even) and coefficient is -3 (negative)
+Therefore, $\displaystyle \lim_{x \to -\infty} -3x^4 + 8x^2 - 2x + 4 = -\infty$
+
+3) $\displaystyle \lim_{x \to \infty} 2e^{-3x} - 4(2^x)$
+
+Let's analyze the two terms separately:
+- $2e^{-3x}$ approaches 0 as $x \to \infty$ (negative exponent)
+- $4(2^x)$ approaches $\infty$ as $x \to \infty$ (exponential growth)
+
+Therefore, $\displaystyle \lim_{x \to \infty} 2e^{-3x} - 4(2^x) = 0 - \infty = -\infty$
+
+The term $-4(2^x)$ dominates and since it's negative, the limit is negative infinity.
+\end{document}
