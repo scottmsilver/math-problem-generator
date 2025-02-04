@@ -15,13 +15,17 @@ from utils.prompt_handler import PromptHandler
 console = Console()
 
 def setup_args() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description='LLM CLI Tool for Gemini and Claude')
+    parser = argparse.ArgumentParser(
+        description='''LLM CLI Tool for Gemini and Claude. 
+        Use named parameters in prompt template like: "Analyze this $item in the image"
+        Then provide the value using --vars item=cat'''
+    )
     parser.add_argument('--model', choices=['gemini', 'claude'], required=True,
                        help='Choose the LLM model to use')
     parser.add_argument('--prompt', required=True,
-                       help='Prompt template to use')
+                       help='Prompt template to use with $name style parameters')
     parser.add_argument('--vars', nargs='*', default=[],
-                       help='Named arguments for the prompt template in key=value format')
+                       help='Named arguments for the prompt template in key=value format (e.g., item=cat)')
     parser.add_argument('--images', nargs='*', default=[],
                        help='Paths to image files to include')
     parser.add_argument('--log-dir', required=True,
@@ -63,7 +67,7 @@ def main():
     try:
         # Process prompt template
         final_prompt = prompt_handler.process_template(args.prompt, template_vars)
-        
+
         # Initialize appropriate provider
         if args.model == 'claude':
             provider = ClaudeProvider()
