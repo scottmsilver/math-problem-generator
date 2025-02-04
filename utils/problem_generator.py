@@ -11,134 +11,104 @@ class ProblemGenerator:
         self.provider = provider or ClaudeProvider()
         self.latex_compiler = LatexCompiler()
         
-    def generate_problems(self, template_file: str, num_problems: int = 5,
-                         difficulty: str = "similar") -> str:
-        """
-        Generate new problems similar to those in the template.
-        
-        Args:
-            template_file: Path to LaTeX template file
-            num_problems: Number of problems to generate
-            difficulty: "easier", "similar", "harder", or "challenge"
-            
-        Returns:
-            str: LaTeX code containing the generated problems
-        """
+    def generate_problems(self, template_file: str, difficulty: str = 'same', num_problems: int = 5) -> str:
+        """Generate problems based on the template and difficulty level."""
         with open(template_file, 'r') as f:
-            template = f.read()
+            template_content = f.read()
             
-        prompt = (
-            f"Study this LaTeX document containing math problems.\n"
-            f"Generate {num_problems} new problems that are {difficulty} in difficulty "
-            f"than the template problems, while maintaining a similar style and format.\n\n"
-            "Rules:\n"
-            "1. Keep the same LaTeX structure and environments\n"
-            "2. Use proper LaTeX notation (e.g., use '^{2}' not '²' for superscripts)\n"
-            "3. Ensure problems are mathematically correct\n"
-            "4. Return ONLY the LaTeX code for the new problems\n"
-            "5. Do NOT include solutions\n"
-            "6. Use \\begin{enumerate} for the problems\n"
-            "7. Each problem should be complete and self-contained\n"
-            "8. Use \\displaystyle for all limits\n"
-            "9. Format all math in proper LaTeX dollar signs\n"
-        )
+        # Calculate number of challenging problems based on difficulty
+        num_challenging = {
+            'same': 0,
+            'challenge': int(num_problems * 0.2),  # 20% challenging
+            'harder': int(num_problems * 0.8)  # 80% challenging
+        }.get(difficulty, 0)
         
-        problems = self.provider.execute(prompt, [template_file])
+        # Create prompt based on difficulty
+        prompt = f"""Generate {num_problems} LaTeX math problems about limits, following these rules:
+1. Use similar notation and style as the example.
+2. Include a mix of different types of limits (polynomials, rational functions, exponential).
+3. {num_challenging} problems should be more challenging than the example.
+4. Mark challenging problems with \\textbf{{[Challenge]}} before the problem.
+5. Use \\begin{{enumerate}} to list the problems.
+6. Use \\displaystyle for all limits.
+7. Return ONLY the LaTeX code for the problems, without any document class or preamble.
+
+Example problems:
+{template_content}"""
+
+        # Get problems from LLM
+        problems = self.provider.execute(prompt)
+        
+        # Ensure problems are wrapped in enumerate
+        if "\\begin{enumerate}" not in problems:
+            problems = "\\begin{enumerate}\n" + problems + "\n\\end{enumerate}"
+            
         return problems
         
     def generate_solutions(self, problems_latex: str) -> str:
-        """
-        Generate detailed solutions for a set of problems.
+        """Generate solutions for the given problems."""
+        prompt = f"""Generate detailed solutions for these math problems. Follow these rules:
+1. Each solution should:
+   - Start with "Solution:" on its own line
+   - Show the original problem
+   - Use align* environment for step-by-step solutions
+   - Include explanatory text for key steps
+   - Box the final answer using \\boxed{{}}
+2. For problems marked as [Challenge], provide extra detail in the explanations.
+3. Use proper LaTeX notation (e.g., \\displaystyle for limits).
+4. Return ONLY the LaTeX code for the solutions.
+
+Problems to solve:
+{problems_latex}"""
+
+        # Get solutions from LLM
+        solutions = self.provider.execute(prompt)
         
-        Args:
-            problems_latex: LaTeX code containing the problems
-            
-        Returns:
-            str: LaTeX code containing the worked-out solutions
-        """
-        # Write problems to a temporary file
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.tex') as temp:
-            temp.write(problems_latex)
-            temp.flush()
-            
-            prompt = (
-                "Generate detailed, worked-out solutions for these math problems.\n"
-                "Rules:\n"
-                "1. Format each solution with clear spacing and organization:\n"
-                "   - Begin each solution with 'Solution:' followed by the original problem in display math\n"
-                "   - Put each step on a separate line using the align* environment\n"
-                "   - Add proper spacing around operators (\\;, \\quad)\n"
-                "   - Never combine multiple steps on one line\n"
-                "   - Add explanatory text between major steps\n\n"
-                "2. For algebraic manipulations:\n"
-                "   - Use \\left( and \\right) for proper parenthesis sizing\n"
-                "   - Use \\dfrac instead of \\frac for main-line fractions\n"
-                "   - Align numerators and denominators cleanly\n"
-                "   - Show each algebraic step on its own line with &= alignment\n\n"
-                "3. For limits with fractions:\n"
-                "   - Factor out highest powers of x clearly\n"
-                "   - Show the factored form on a separate line\n"
-                "   - Keep limit evaluations of separate parts distinct\n"
-                "   - Use proper grouping with \\left( and \\right) when splitting limits\n"
-                "   - Use \\limit{x \\to a} instead of \\lim_{x \\to a}\n\n"
-                "4. For final evaluations:\n"
-                "   - Break down steps leading to infinity or numerical results\n"
-                "   - Show multiplication with infinity clearly (e.g., '\\infinity \\cdot 4')\n"
-                "   - Show reduction of fractions to simplest form\n"
-                "   - Use \\infinity instead of \\infty\n\n"
-                "5. For limit notation:\n"
-                "   - Use \\limit{x \\to a} macro for consistent spacing\n"
-                "   - Use \\infinity macro for proper infinity symbol\n"
-                "   - Add \\; before arrows\n"
-                "   - Use \\to instead of \\rightarrow\n\n"
-                "6. Use proper LaTeX environments:\n"
-                "   - Begin each solution with \\textbf{Solution:}\n"
-                "   - Use align* environment for sequential steps\n"
-                "   - Add \\quad before explanatory text\n"
-                "   - Number solutions to match problem numbers\n"
-                "   - Add blank line between solutions\n"
-            )
-            
-            solutions = self.provider.execute(prompt, [temp.name])
-            
-            # Add LaTeX preamble for better math formatting
-            preamble = (
-                "% Custom spacing for limit notation\n"
-                "\\def\\limit#1{\\lim\\limits_{#1}\\;}\n"
-                "\\def\\infinity{\\infty}\n\n"
-                "% Better fraction spacing\n"
-                "\\setlength{\\jot}{12pt}\n"
-                "\\setlength{\\arraycolsep}{2pt}\n\n"
-                "% Better display math spacing\n"
-                "\\setlength{\\abovedisplayskip}{12pt}\n"
-                "\\setlength{\\belowdisplayskip}{12pt}\n"
-                "\\setlength{\\abovedisplayshortskip}{12pt}\n"
-                "\\setlength{\\belowdisplayshortskip}{12pt}\n\n"
-            )
-            
-            return preamble + solutions
+        # Add custom spacing commands for better formatting
+        preamble = """% Custom spacing for limit notation
+\\def\\limit#1{\\lim\\limits_{#1}\\;}
+\\def\\infinity{\\infty}
+
+% Better fraction spacing
+\\setlength{\\jot}{12pt}
+\\setlength{\\arraycolsep}{2pt}
+
+% Better display math spacing
+\\setlength{\\abovedisplayskip}{12pt}
+\\setlength{\\belowdisplayskip}{12pt}
+\\setlength{\\abovedisplayshortskip}{12pt}
+\\setlength{\\belowdisplayshortskip}{12pt}
+"""
+        
+        return preamble + "\n" + solutions
 
     def _create_latex_document(self, content: str, title: str) -> str:
         """Create a complete LaTeX document with the given content."""
-        return (
-            "\\documentclass{article}\n"
-            "\\usepackage{amsmath}\n"
-            "\\usepackage{amssymb}\n"
-            "\\usepackage{amsthm}\n\n"
-            "\\begin{document}\n\n"
-            f"\\section*{{{title}}}\n"
-            f"{content}\n\n"
-            "\\end{document}"
-        )
-        
+        return f"""\\documentclass{{article}}
+\\usepackage{{amsmath}}
+\\usepackage{{amssymb}}
+\\usepackage{{amsthm}}
+
+\\begin{{document}}
+
+\\section*{{{title}}}
+{content}
+
+\\end{{document}}
+"""
+
     def create_problem_set(self, template_file: str, 
-                          output_dir: Optional[str] = None) -> Tuple[str, str]:
+                          output_dir: Optional[str] = None,
+                          difficulty: str = 'same',
+                          num_problems: int = 5) -> Tuple[str, str]:
         """
         Create separate problem and solution files.
         
         Args:
             template_file: Path to LaTeX template
             output_dir: Optional directory to save the generated files
+            difficulty: Difficulty level ('same', 'challenge', or 'harder')
+            num_problems: Number of problems to generate
             
         Returns:
             Tuple[str, str]: Paths to the generated problem and solution PDFs
@@ -166,8 +136,8 @@ class ProblemGenerator:
                 temp.flush()
                 template_file = temp.name
         
-        # Generate problems
-        problems = self.generate_problems(template_file)
+        # Generate problems with specified difficulty
+        problems = self.generate_problems(template_file, difficulty, num_problems)
         problems_latex = self._create_latex_document(problems, "Problems")
         
         # Generate solutions

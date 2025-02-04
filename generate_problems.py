@@ -12,13 +12,18 @@ def setup_args() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description='Generate math problems similar to a template'
     )
-    parser.add_argument('template',
+    parser.add_argument('template_file',
                        help='Input LaTeX template file')
     parser.add_argument('--output-dir',
                        help='Output directory for generated files')
     parser.add_argument('--provider', choices=['claude', 'gemini'],
                        default='claude',
                        help='LLM provider to use (default: claude)')
+    parser.add_argument('--difficulty', choices=['same', 'challenge', 'harder'], default='same',
+                      help='Difficulty level: same (100% same), challenge (20% harder), harder (80% harder)')
+    parser.add_argument('--num-problems', type=int,
+                       default=5,
+                       help='Number of problems to generate (default: 5)')
     return parser
 
 def main():
@@ -33,11 +38,13 @@ def main():
             
         generator = ProblemGenerator(provider)
         
-        console.print(f"[yellow]Generating problems and solutions using {args.provider}...[/yellow]")
+        console.print(f"[yellow]Generating {args.num_problems} problems and solutions using {args.provider}...[/yellow]")
         
         problems_pdf, solutions_pdf = generator.create_problem_set(
-            args.template,
-            output_dir=args.output_dir
+            args.template_file,
+            output_dir=args.output_dir,
+            difficulty=args.difficulty,
+            num_problems=args.num_problems
         )
         
         console.print(f"[green]✓ Generated problems saved to: {problems_pdf}[/green]")
