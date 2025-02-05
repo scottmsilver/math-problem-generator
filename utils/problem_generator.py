@@ -2,6 +2,8 @@ import os
 from typing import Optional, List, Dict, Tuple
 from pathlib import Path
 import tempfile
+
+from math_latex import MathLatexConverter
 from .latex_compiler import LatexCompiler
 from providers.claude_provider import ClaudeProvider
 
@@ -13,9 +15,12 @@ class ProblemGenerator:
         
     def generate_problems(self, template_file: str, difficulty: str = 'same', num_problems: int = 5) -> str:
         """Generate problems based on the template and difficulty level."""
-        with open(template_file, 'r') as f:
-            template_content = f.read()
-            
+        if template_file.lower().endswith('.pdf'):
+            template_content = MathLatexConverter(self.provider, "logs").convert_to_latex(template_file)
+        else:
+            with open(template_file, 'r') as f:
+                template_content = f.read()
+                
         # Calculate number of challenging problems based on difficulty
         num_challenging = {
             'same': 0,
@@ -100,7 +105,7 @@ Problems to solve:
     def create_problem_set(self, template_file: str, 
                           output_dir: Optional[str] = None,
                           difficulty: str = 'same',
-                          num_problems: int = 5) -> Tuple[str, str]:
+                          num_problems: int = 5) -> Tuple[str, str, str, str]:
         """
         Create separate problem and solution files.
         
@@ -111,31 +116,9 @@ Problems to solve:
             num_problems: Number of problems to generate
             
         Returns:
-            Tuple[str, str]: Paths to the generated problem and solution PDFs
+            Tuple[str, str, str, str]: Paths to the generated problem and solution PDFs,
+                                     and their corresponding LaTeX content
         """
-        # Convert PDF to LaTeX if needed
-        if template_file.lower().endswith('.pdf'):
-            # Create a basic LaTeX template from the PDF content
-            latex_template = (
-                "\\documentclass{article}\n"
-                "\\usepackage{amsmath}\n"
-                "\\usepackage{amssymb}\n"
-                "\\usepackage{amsthm}\n\n"
-                "\\begin{document}\n\n"
-                "\\section*{Problems}\n"
-                "\\begin{enumerate}\n"
-                "\\item $\\displaystyle \\lim_{x \\to \\infty} x^2 - 3x + 4$\n"
-                "\\item $\\displaystyle \\lim_{x \\to -\\infty} \\frac{2x^3 + 1}{x^3 - 2}$\n"
-                "\\end{enumerate}\n"
-                "\\end{document}"
-            )
-            
-            # Write to a temporary file
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.tex') as temp:
-                temp.write(latex_template)
-                temp.flush()
-                template_file = temp.name
-        
         # Generate problems with specified difficulty
         problems = self.generate_problems(template_file, difficulty, num_problems)
         problems_latex = self._create_latex_document(problems, "Problems")
@@ -170,4 +153,4 @@ Problems to solve:
             with open(solutions_tex, 'w') as f:
                 f.write(solutions_latex)
             
-        return problems_pdf, solutions_pdf
+        return problems_pdf, solutions_pdf, problems_latex, solutions_latex
