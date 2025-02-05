@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -10,6 +10,7 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
+  DialogContentText,
   DialogActions,
   Grid,
   FormControl,
@@ -18,6 +19,7 @@ import {
   MenuItem,
   TextField,
   Typography,
+  LinearProgress,
 } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
 import axios from '../utils/axios';
@@ -28,24 +30,67 @@ function GeneratedSets() {
   const [provider, setProvider] = useState('claude');
   const [difficulty, setDifficulty] = useState('same');
   const [numProblems, setNumProblems] = useState(5);
+  const [progress, setProgress] = useState('');
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    console.log('Creating EventSource connection...');
+    const eventSource = new EventSource(`http://localhost:8081/api/events?token=${token}`, {
+      withCredentials: true
+    });
+    
+    eventSource.onopen = () => {
+      console.log('SSE connection opened');
+    };
+    
+    eventSource.onmessage = (event) => {
+      console.log('SSE message received:', event.data);
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'progress') {
+          console.log('Progress update:', data.message);
+          setProgress(data.message);
+        }
+      } catch (error) {
+        console.error('Error parsing SSE message:', error);
+      }
+    };
+
+    eventSource.onerror = (error) => {
+      console.error('SSE Error:', error);
+      if (eventSource.readyState === EventSource.CLOSED) {
+        console.log('SSE connection closed');
+      }
+      eventSource.close();
+    };
+
+    return () => {
+      console.log('Closing SSE connection');
+      eventSource.close();
+    };
+  }, []);
 
   const { data: generatedSets, isLoading } = useQuery({
     queryKey: ['generatedSets', problemSetId],
-    queryFn: () =>
+    queryFn: async () =>
       axios.get(`/api/problem-sets/${problemSetId}/generated`).then((res) => res.data),
   });
 
   const generateSet = useMutation({
     mutationFn: async () => {
       try {
+        setProgress('Starting generation...');
         const data = {
           provider,
           difficulty,
           num_problems: numProblems,
         };
-        console.log('Sending data:', data);
+        console.log('Sending generation request:', data);
         const response = await axios.post(`/api/problem-sets/${problemSetId}/generate`, data);
+        console.log('Generation response:', response.data);
         return response.data;
       } catch (error) {
         console.error('Generate error:', error.response?.data || error);
@@ -55,6 +100,11 @@ function GeneratedSets() {
     onSuccess: () => {
       queryClient.invalidateQueries(['generatedSets', problemSetId]);
       setOpen(false);
+      setProgress('');
+    },
+    onError: (error) => {
+      console.error('Generation failed:', error);
+      setProgress('');
     },
   });
 
@@ -128,45 +178,54 @@ function GeneratedSets() {
         ))}
       </Grid>
 
-      <Dialog open={open} onClose={() => setOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={open} onClose={() => !generateSet.isLoading && setOpen(false)}>
         <DialogTitle>Generate New Problem Set</DialogTitle>
         <DialogContent>
-          <Box sx={{ mt: 2 }}>
-            <FormControl fullWidth sx={{ mb: 2 }}>
-              <InputLabel>Provider</InputLabel>
-              <Select
-                value={provider}
-                label="Provider"
-                onChange={(e) => setProvider(e.target.value)}
-              >
-                <MenuItem value="claude">Claude</MenuItem>
-                <MenuItem value="gemini">Gemini</MenuItem>
-              </Select>
-            </FormControl>
-            <FormControl fullWidth sx={{ mb: 2 }}>
-              <InputLabel>Difficulty</InputLabel>
-              <Select
-                value={difficulty}
-                label="Difficulty"
-                onChange={(e) => setDifficulty(e.target.value)}
-              >
-                <MenuItem value="same">Same</MenuItem>
-                <MenuItem value="challenge">Challenge</MenuItem>
-                <MenuItem value="harder">Harder</MenuItem>
-              </Select>
-            </FormControl>
+          <DialogContentText>
+            Choose your settings for the new problem set:
+          </DialogContentText>
+          <FormControl fullWidth margin="normal">
+            <InputLabel>Provider</InputLabel>
+            <Select value={provider} onChange={(e) => setProvider(e.target.value)}>
+              <MenuItem value="claude">Claude</MenuItem>
+              <MenuItem value="gemini">Gemini</MenuItem>
+            </Select>
+          </FormControl>
+          <FormControl fullWidth margin="normal">
+            <InputLabel>Difficulty</InputLabel>
+            <Select value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
+              <MenuItem value="same">Same</MenuItem>
+              <MenuItem value="challenge">Challenge</MenuItem>
+              <MenuItem value="harder">Harder</MenuItem>
+            </Select>
+          </FormControl>
+          <FormControl fullWidth margin="normal">
             <TextField
-              fullWidth
-              type="number"
               label="Number of Problems"
+              type="number"
               value={numProblems}
-              onChange={(e) => setNumProblems(parseInt(e.target.value, 10))}
+              onChange={(e) => setNumProblems(parseInt(e.target.value))}
               inputProps={{ min: 1, max: 20 }}
             />
-          </Box>
+          </FormControl>
+          {(generateSet.isLoading || progress) && (
+            <Box sx={{ mt: 2 }}>
+              <LinearProgress />
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                {progress || 'Preparing...'}
+              </Typography>
+            </Box>
+          )}
+          {generateSet.isError && (
+            <Typography color="error" sx={{ mt: 2 }}>
+              Error: {generateSet.error?.response?.data?.error || 'Failed to generate problems'}
+            </Typography>
+          )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpen(false)}>Cancel</Button>
+          <Button onClick={() => setOpen(false)} disabled={generateSet.isLoading}>
+            Cancel
+          </Button>
           <Button
             variant="contained"
             onClick={handleGenerate}

@@ -1,5 +1,5 @@
-from flask import Flask, request, jsonify, send_file
-from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
+from flask import Flask, request, jsonify, send_file, Response, stream_with_context
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity, decode_token
 from flask_bcrypt import Bcrypt
 from flask_migrate import Migrate
 from flask_cors import CORS
@@ -7,6 +7,10 @@ from datetime import datetime, timedelta
 import os
 import traceback
 import logging
+import tempfile
+import queue
+import threading
+import json
 
 from config import Config
 from models.database import db, User, ProblemSet, GeneratedSet, DifficultyLevel, Provider
@@ -49,6 +53,85 @@ with app.app_context():
 
 # Ensure upload directory exists
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+
+# Progress queue for SSE
+progress_queues = {}
+
+def send_progress(user_id: int, message: str):
+    """Send a progress message to the user's queue."""
+    app.logger.info(f"Sending progress for user {user_id}: {message}")
+    if user_id not in progress_queues:
+        app.logger.info(f"Creating new queue for user {user_id}")
+        progress_queues[user_id] = queue.Queue()
+    progress_queues[user_id].put({
+        'type': 'progress',
+        'message': message
+    })
+
+@app.route('/api/events')
+def events():
+    """SSE endpoint for progress updates."""
+    token = request.args.get('token')
+    app.logger.info("SSE connection attempt")
+    if not token:
+        app.logger.error("No token provided")
+        return jsonify({'error': 'No token provided'}), 401
+        
+    try:
+        # Verify and decode the token
+        decoded_token = decode_token(token)
+        user_id = int(decoded_token['sub'])
+        app.logger.info(f"SSE connection established for user {user_id}")
+        
+        # Create queue for this user if it doesn't exist
+        if user_id not in progress_queues:
+            app.logger.info(f"Creating new queue for user {user_id} in events")
+            progress_queues[user_id] = queue.Queue()
+            # Send initial message
+            progress_queues[user_id].put({
+                'type': 'progress',
+                'message': 'Connected to progress updates'
+            })
+        
+        def generate():
+            app.logger.info(f"Starting event stream for user {user_id}")
+            try:
+                while True:
+                    try:
+                        # Get message from queue, timeout after 30 seconds
+                        msg = progress_queues[user_id].get(timeout=30)
+                        app.logger.info(f"Sending message to user {user_id}: {msg}")
+                        yield f"data: {json.dumps(msg)}\n\n"
+                    except queue.Empty:
+                        # Send ping to keep connection alive
+                        app.logger.debug(f"Sending ping to user {user_id}")
+                        yield f"data: {json.dumps({'type': 'ping'})}\n\n"
+                    except KeyError:
+                        # Queue was deleted, exit
+                        app.logger.warning(f"Queue deleted for user {user_id}")
+                        break
+                        
+            finally:
+                # Cleanup when client disconnects
+                app.logger.info(f"Client disconnected for user {user_id}")
+                if user_id in progress_queues:
+                    del progress_queues[user_id]
+        
+        return Response(
+            stream_with_context(generate()),
+            mimetype='text/event-stream',
+            headers={
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+                'Access-Control-Allow-Origin': 'http://localhost:3000',
+                'Access-Control-Allow-Credentials': 'true',
+                'Content-Type': 'text/event-stream'
+            }
+        )
+        
+    except Exception as e:
+        app.logger.error(f"SSE Error: {str(e)}")
+        return jsonify({'error': 'Invalid token'}), 401
 
 @app.route('/api/auth/register', methods=['POST'])
 def register():
@@ -262,12 +345,31 @@ def generate_problems(set_id):
         # Generate problems and solutions
         generator = ProblemGenerator(provider)
         try:
-            problems_pdf, solutions_pdf, problems_latex, solutions_latex = generator.create_problem_set(
-                template_file=template_file,  # Changed from template to template_file
-                output_dir=output_dir,
-                difficulty=difficulty,
-                num_problems=num_problems
-            )
+            # Step 1: Generate problems
+            send_progress(user_id, "Generating problems...")
+            problems = generator.generate_problems(template_file, difficulty, num_problems)
+            problems_latex = generator._create_latex_document(problems, "Problems")
+            
+            # Step 2: Generate solutions
+            send_progress(user_id, "Generating solutions...")
+            solutions = generator.generate_solutions(problems)
+            solutions_latex = generator._create_latex_document(solutions, "Solutions")
+            
+            # Step 3: Compile problems PDF
+            send_progress(user_id, "Compiling problems PDF...")
+            with tempfile.NamedTemporaryFile(suffix='.tex', mode='w') as temp:
+                temp.write(problems_latex)
+                temp.flush()
+                problems_pdf = generator.latex_compiler.compile_to_pdf(temp.name, output_dir)
+            
+            # Step 4: Compile solutions PDF
+            send_progress(user_id, "Compiling solutions PDF...")
+            with tempfile.NamedTemporaryFile(suffix='.tex', mode='w') as temp:
+                temp.write(solutions_latex)
+                temp.flush()
+                solutions_pdf = generator.latex_compiler.compile_to_pdf(temp.name, output_dir)
+            
+            send_progress(user_id, "Generation complete!")
             
             # Create new generated set record
             generated_set = GeneratedSet(
@@ -293,6 +395,7 @@ def generate_problems(set_id):
             
         except Exception as e:
             app.logger.error(f"Error generating problems: {str(e)}\n{''.join(traceback.format_tb(e.__traceback__))}")
+            send_progress(user_id, f"Error: {str(e)}")
             return jsonify({'error': str(e)}), 500
             
     except ValueError as e:
