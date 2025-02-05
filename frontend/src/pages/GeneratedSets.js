@@ -20,6 +20,10 @@ import {
   TextField,
   Typography,
   LinearProgress,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemSecondaryAction,
 } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
 import axios from '../utils/axios';
@@ -147,37 +151,55 @@ function GeneratedSets() {
         </Button>
       </Box>
 
-      <Grid container spacing={3}>
-        {generatedSets?.map((set) => (
-          <Grid item xs={12} sm={6} md={4} key={set.id}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6">
-                  Generated on {new Date(set.created_at).toLocaleDateString()}
-                </Typography>
-                <Typography>Provider: {set.provider}</Typography>
-                <Typography>Difficulty: {set.difficulty}</Typography>
-                <Typography>Problems: {set.num_problems}</Typography>
-              </CardContent>
-              <CardActions>
-                <Button
-                  size="small"
-                  onClick={() => handleDownload(set.id, 'problems')}
+      {/* Generated Sets List */}
+      <Box sx={{ mt: 3 }}>
+        <List>
+          {generatedSets?.map((set) => (
+            <ListItem 
+              key={set.id}
+              divider
+              sx={{ 
+                backgroundColor: 'background.paper',
+                borderRadius: 1,
+                mb: 1,
+                '&:hover': {
+                  backgroundColor: 'action.hover',
+                }
+              }}
+            >
+              <ListItemText
+                primary={
+                  <Typography variant="subtitle1">
+                    Generated {new Date(set.created_at).toLocaleString()}
+                  </Typography>
+                }
+                secondary={
+                  <Typography variant="body2" color="text.secondary">
+                    {set.num_problems} problems • {set.difficulty} difficulty • {set.provider.toLowerCase()} provider
+                  </Typography>
+                }
+              />
+              <ListItemSecondaryAction>
+                <Button 
+                  href={`/api/generated-sets/${set.id}/download?type=problems`}
+                  color="primary"
+                  sx={{ mr: 1 }}
                 >
-                  Download Problems
+                  Problems
                 </Button>
-                <Button
-                  size="small"
-                  onClick={() => handleDownload(set.id, 'solutions')}
+                <Button 
+                  href={`/api/generated-sets/${set.id}/download?type=solutions`}
+                  color="secondary"
                 >
-                  Download Solutions
+                  Solutions
                 </Button>
-              </CardActions>
-            </Card>
-          </Grid>
-        ))}
-      </Grid>
+              </ListItemSecondaryAction>
+            </ListItem>
+          ))}
+        </List>
+      </Box>
 
+      {/* Generation Dialog */}
       <Dialog open={open} onClose={() => !generateSet.isLoading && setOpen(false)}>
         <DialogTitle>Generate New Problem Set</DialogTitle>
         <DialogContent>

@@ -408,29 +408,23 @@ def generate_problems(set_id):
 @app.route('/api/problem-sets/<int:set_id>/generated', methods=['GET'])
 @jwt_required()
 def get_generated_sets(set_id):
-    try:
-        # Convert user ID from string back to integer
-        user_id = int(get_jwt_identity())
-        app.logger.info(f"Fetching generated sets for problem set {set_id}")
-        
-        problem_set = ProblemSet.query.filter_by(id=set_id, user_id=user_id).first()
-        if not problem_set:
-            return jsonify({'error': 'Problem set not found'}), 404
-            
-        return jsonify([{
-            'id': gs.id,
-            'created_at': gs.created_at.isoformat(),
-            'provider': gs.provider.name.lower(),
-            'difficulty': gs.difficulty.name.lower(),
-            'num_problems': gs.num_problems
-        } for gs in problem_set.generated_sets]), 200
-        
-    except ValueError as e:
-        app.logger.error(f"Invalid user ID format: {str(e)}\n{''.join(traceback.format_tb(e.__traceback__))}")
-        return jsonify({'error': 'Invalid user ID format'}), 400
-    except Exception as e:
-        app.logger.error(f"Error fetching generated sets: {str(e)}\n{''.join(traceback.format_tb(e.__traceback__))}")
-        return jsonify({'error': f'Error fetching generated sets: {str(e)}'}), 500
+    user_id = int(get_jwt_identity())
+    
+    # Get all generated sets for this problem set
+    generated_sets = GeneratedSet.query.join(ProblemSet).filter(
+        ProblemSet.id == set_id,
+        ProblemSet.user_id == user_id
+    ).order_by(GeneratedSet.created_at.desc()).all()
+    
+    return jsonify([{
+        'id': set.id,
+        'created_at': set.created_at.isoformat(),
+        'provider': set.provider.value,
+        'difficulty': set.difficulty.value,
+        'num_problems': set.num_problems,
+        'problems_path': set.problems_pdf_path,
+        'solutions_path': set.solutions_pdf_path
+    } for set in generated_sets])
 
 @app.route('/api/generated-sets/<int:set_id>/download', methods=['GET'])
 @jwt_required()
