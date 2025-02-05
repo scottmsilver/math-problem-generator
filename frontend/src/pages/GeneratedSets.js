@@ -27,15 +27,10 @@ import {
   Stack,
   IconButton,
 } from '@mui/material';
-import {
-  Add as AddIcon,
-  Download as DownloadIcon,
-  Close as CloseIcon,
-  ErrorOutline as ErrorOutlineIcon,
-  Replay as ReplayIcon
-} from '@mui/icons-material';
+import { Add as AddIcon, Download as DownloadIcon, Close as CloseIcon } from '@mui/icons-material';
 import axios from '../utils/axios';
 import { downloadService } from '../services/downloadService';
+import { formatDistanceToNow } from 'date-fns';
 
 function GeneratedSets() {
   const { id: problemSetId } = useParams();
@@ -45,8 +40,6 @@ function GeneratedSets() {
   const [numProblems, setNumProblems] = useState(5);
   const [progress, setProgress] = useState('');
   const [generationStarted, setGenerationStarted] = useState(false);
-  const [generatedSettings, setGeneratedSettings] = useState(null);
-  const [isNewSet, setIsNewSet] = useState(true);
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -97,21 +90,14 @@ function GeneratedSets() {
 
   const handleClose = () => {
     setOpen(false);
-    setIsNewSet(true);
     setGenerationStarted(false);
     setProgress('');
     generateSet.reset();
-    setGeneratedSettings(null);
   };
 
   const handleGenerate = () => {
-    setGeneratedSettings({
-      provider,
-      difficulty,
-      numProblems
-    });
-    setIsNewSet(false);
     setGenerationStarted(true);
+    setProgress('');
     generateSet.mutate();
   };
 
@@ -173,207 +159,149 @@ function GeneratedSets() {
       {/* Generated Sets List */}
       <Box sx={{ mt: 3 }}>
         <List>
-          {generatedSets?.map((set) => (
-            <ListItem 
-              key={set.id}
-              divider
-              sx={{ 
-                backgroundColor: 'background.paper',
-                borderRadius: 1,
-                mb: 1,
-                '&:hover': {
-                  backgroundColor: 'action.hover',
-                }
-              }}
-            >
-              <ListItemText
-                primary={
-                  <Typography variant="subtitle1">
-                    Generated {new Date(set.created_at).toLocaleString()}
-                  </Typography>
-                }
-                secondary={
-                  <Typography variant="body2" color="text.secondary">
-                    {set.num_problems} problems • {set.difficulty} difficulty • {set.provider.toLowerCase()} provider
-                  </Typography>
-                }
-              />
-              <ListItemSecondaryAction>
-                <Button 
-                  onClick={() => handleDownload('problems', set.id)}
-                  color="primary"
-                  sx={{ mr: 1 }}
-                >
-                  Problems
-                </Button>
-                <Button 
-                  onClick={() => handleDownload('solutions', set.id)}
-                  color="secondary"
-                >
-                  Solutions
-                </Button>
-              </ListItemSecondaryAction>
-            </ListItem>
-          ))}
+          {generatedSets
+            ?.sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+            .map((set) => (
+              <ListItem 
+                key={set.id}
+                divider
+                sx={{ 
+                  backgroundColor: 'background.paper',
+                  borderRadius: 1,
+                  mb: 1,
+                  '&:hover': {
+                    backgroundColor: 'action.hover',
+                  }
+                }}
+              >
+                <ListItemText
+                  primary={formatDistanceToNow(new Date(set.created_at))}
+                  secondary={
+                    <Typography variant="body2" color="text.secondary">
+                      {set.num_problems} problems • {set.difficulty} difficulty • {set.provider.toLowerCase()} provider
+                    </Typography>
+                  }
+                />
+                <ListItemSecondaryAction>
+                  <Button 
+                    onClick={() => handleDownload('problems', set.id)}
+                    color="primary"
+                    sx={{ mr: 1 }}
+                  >
+                    Problems
+                  </Button>
+                  <Button 
+                    onClick={() => handleDownload('solutions', set.id)}
+                    color="secondary"
+                  >
+                    Solutions
+                  </Button>
+                </ListItemSecondaryAction>
+              </ListItem>
+            ))}
         </List>
       </Box>
 
       {/* Generation Dialog */}
       <Dialog open={open} onClose={handleClose}>
-        <Box sx={{ p: 3 }}>
-          <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-            <Typography variant="h6" component="div">
-              {isNewSet ? "Create New Problem Set" : generateSet.isSuccess ? "Generation Report" : "Generating Problem Set"}
-            </Typography>
+        <DialogTitle>
+          <Box display="flex" justifyContent="space-between" alignItems="center">
+            Generate New Problem Set
             <IconButton onClick={handleClose} size="small">
               <CloseIcon />
             </IconButton>
           </Box>
-
-          {isNewSet ? (
-            <Box>
-              <FormControl fullWidth margin="normal">
-                <InputLabel>Provider</InputLabel>
-                <Select
-                  value={provider}
-                  onChange={(e) => setProvider(e.target.value)}
-                >
-                  <MenuItem value="claude">Claude</MenuItem>
-                  <MenuItem value="gemini">Gemini</MenuItem>
-                </Select>
-              </FormControl>
-
-              <FormControl fullWidth margin="normal">
-                <InputLabel>Difficulty</InputLabel>
-                <Select
-                  value={difficulty}
-                  onChange={(e) => setDifficulty(e.target.value)}
-                >
-                  <MenuItem value="same">Same</MenuItem>
-                  <MenuItem value="challenge">Challenge</MenuItem>
-                  <MenuItem value="harder">Harder</MenuItem>
-                </Select>
-              </FormControl>
-
-              <FormControl fullWidth margin="normal">
-                <TextField
-                  label="Number of Problems"
-                  type="number"
-                  value={numProblems}
-                  onChange={(e) => setNumProblems(parseInt(e.target.value))}
-                  inputProps={{ min: 1, max: 20 }}
-                />
-              </FormControl>
-
-              <Button 
-                variant="contained" 
-                onClick={handleGenerate}
-                fullWidth
-                sx={{ mt: 2 }}
-              >
-                Generate
-              </Button>
-            </Box>
-          ) : (
-            <Box>
-              {/* Settings Summary */}
-              <Box sx={{ 
-                bgcolor: 'background.paper',
-                borderRadius: 1,
-                p: 2,
-                mb: 3,
-                border: '1px solid',
-                borderColor: 'divider'
-              }}>
-                <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                  Generation Settings
-                </Typography>
-                <Grid container spacing={2}>
-                  <Grid item xs={4}>
-                    <Typography variant="body2">Provider:</Typography>
-                    <Typography variant="body1" fontWeight="medium">
-                      {generatedSettings?.provider}
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={4}>
-                    <Typography variant="body2">Difficulty:</Typography>
-                    <Typography variant="body1" fontWeight="medium">
-                      {generatedSettings?.difficulty}
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={4}>
-                    <Typography variant="body2">Problem Count:</Typography>
-                    <Typography variant="body1" fontWeight="medium">
-                      {generatedSettings?.numProblems}
-                    </Typography>
-                  </Grid>
-                </Grid>
-              </Box>
-
-              {/* Progress and Results */}
-              {generationStarted && (
-                <Box sx={{ mt: 2 }}>
-                  <LinearProgress sx={{ mb: 2 }}/>
-                  <Typography variant="body2" color="text.secondary">
-                    {progress || 'Initializing generation process...'}
-                  </Typography>
-                </Box>
-              )}
-
-              {generateSet.isSuccess && (
-                <Box sx={{ mt: 3 }}>
-                  <Typography variant="subtitle2" color="success.main" gutterBottom>
-                    Generation Completed Successfully
-                  </Typography>
-                  <Stack direction="row" spacing={2}>
-                    <Button
-                      variant="contained"
-                      onClick={() => handleDownload('problems', generateSet.data.id)}
-                      startIcon={<DownloadIcon />}
-                    >
-                      Problems PDF
-                    </Button>
-                    <Button
-                      variant="contained"
-                      color="secondary"
-                      onClick={() => handleDownload('solutions', generateSet.data.id)}
-                      startIcon={<DownloadIcon />}
-                    >
-                      Solutions PDF
-                    </Button>
-                  </Stack>
-                </Box>
-              )}
-
-              {generateSet.isError && (
-                <Box sx={{ mt: 3 }}>
-                  <Box sx={{ 
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1,
-                    mb: 2,
-                    color: 'error.main'
-                  }}>
-                    <ErrorOutlineIcon />
-                    <Typography variant="subtitle2">
-                      Generation Failed
-                    </Typography>
-                  </Box>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    {generateSet.error?.response?.data?.error || 'An unexpected error occurred during generation'}
-                  </Typography>
-                  <Button
-                    variant="outlined"
-                    onClick={() => generateSet.mutate()}
-                    startIcon={<ReplayIcon />}
-                  >
-                    Retry Generation
-                  </Button>
-                </Box>
-              )}
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Choose your settings for the new problem set:
+          </DialogContentText>
+          <FormControl fullWidth margin="normal">
+            <InputLabel>Provider</InputLabel>
+            <Select 
+              value={provider} 
+              onChange={(e) => setProvider(e.target.value)}
+              disabled={generationStarted}
+            >
+              <MenuItem value="claude">Claude</MenuItem>
+              <MenuItem value="gemini">Gemini</MenuItem>
+            </Select>
+          </FormControl>
+          <FormControl fullWidth margin="normal">
+            <InputLabel>Difficulty</InputLabel>
+            <Select 
+              value={difficulty} 
+              onChange={(e) => setDifficulty(e.target.value)}
+              disabled={generationStarted}
+            >
+              <MenuItem value="same">Same</MenuItem>
+              <MenuItem value="challenge">Challenge</MenuItem>
+              <MenuItem value="harder">Harder</MenuItem>
+            </Select>
+          </FormControl>
+          <FormControl fullWidth margin="normal">
+            <TextField
+              label="Number of Problems"
+              type="number"
+              value={numProblems}
+              onChange={(e) => setNumProblems(parseInt(e.target.value))}
+              inputProps={{ min: 1, max: 20 }}
+              disabled={generationStarted}
+            />
+          </FormControl>
+          
+          {generationStarted && (
+            <Box sx={{ mt: 3, mb: 2 }}>
+              <LinearProgress />
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                {progress || 'Starting generation...'}
+              </Typography>
             </Box>
           )}
-        </Box>
+
+          {generateSet.isSuccess && (
+            <Box sx={{ mt: 3 }}>
+              <Typography variant="h6" color="success.main" sx={{ mb: 2 }}>
+                Generation Complete! 🎉
+              </Typography>
+              <Stack direction="row" spacing={2}>
+                <Button
+                  variant="contained"
+                  onClick={() => handleDownload('problems', generateSet.data.id)}
+                  startIcon={<DownloadIcon />}
+                >
+                  Problems PDF
+                </Button>
+                <Button
+                  variant="contained"
+                  color="secondary"
+                  onClick={() => handleDownload('solutions', generateSet.data.id)}
+                  startIcon={<DownloadIcon />}
+                >
+                  Solutions PDF
+                </Button>
+              </Stack>
+            </Box>
+          )}
+
+          {generateSet.isError && (
+            <Typography color="error" sx={{ mt: 2 }}>
+              Error: {generateSet.error?.response?.data?.error || 'Failed to generate problems'}
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          {generateSet.status === 'idle' && (
+            <Button
+              variant="contained"
+              onClick={handleGenerate}
+              disabled={generateSet.isLoading}
+              fullWidth
+            >
+              Generate
+            </Button>
+          )}
+        </DialogActions>
       </Dialog>
     </>
   );
