@@ -429,20 +429,41 @@ def get_generated_sets(set_id):
 @app.route('/api/generated-sets/<int:set_id>/download', methods=['GET'])
 @jwt_required()
 def download_generated_set(set_id):
-    # Convert user ID from string back to integer
-    user_id = int(get_jwt_identity())
-    generated_set = GeneratedSet.query.join(ProblemSet).filter(
-        GeneratedSet.id == set_id,
-        ProblemSet.user_id == user_id
-    ).first()
-    
-    if not generated_set:
-        return jsonify({'error': 'Generated set not found'}), 404
-    
-    file_type = request.args.get('type', 'problems')  # or 'solutions'
-    pdf_path = generated_set.problems_pdf_path if file_type == 'problems' else generated_set.solutions_pdf_path
-    
-    return send_file(pdf_path, as_attachment=True)
+    try:
+        user_id = int(get_jwt_identity())
+        download_type = request.args.get('type')
+        
+        if download_type not in ['problems', 'solutions']:
+            return jsonify({'error': 'Invalid download type'}), 400
+            
+        generated_set = GeneratedSet.query.join(ProblemSet).filter(
+            GeneratedSet.id == set_id,
+            ProblemSet.user_id == user_id
+        ).first()
+        
+        if not generated_set:
+            return jsonify({'error': 'Generated set not found'}), 404
+            
+        file_path = generated_set.problems_pdf_path if download_type == 'problems' else generated_set.solutions_pdf_path
+        
+        if not os.path.exists(file_path):
+            return jsonify({'error': f'{download_type.title()} PDF not found'}), 404
+            
+        response = send_file(
+            file_path,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=f'{download_type}.pdf'
+        )
+        
+        # Add CORS headers
+        response.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        return response
+        
+    except Exception as e:
+        app.logger.error(f"Download error: {str(e)}")
+        return jsonify({'error': 'Failed to download file'}), 500
 
 if __name__ == '__main__':
     app.run(port=8081, debug=True)

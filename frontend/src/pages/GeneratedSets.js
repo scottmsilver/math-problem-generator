@@ -24,9 +24,11 @@ import {
   ListItem,
   ListItemText,
   ListItemSecondaryAction,
+  Stack,
 } from '@mui/material';
-import { Add as AddIcon } from '@mui/icons-material';
+import { Add as AddIcon, Download as DownloadIcon } from '@mui/icons-material';
 import axios from '../utils/axios';
+import { downloadService } from '../services/downloadService';
 
 function GeneratedSets() {
   const { id: problemSetId } = useParams();
@@ -35,6 +37,7 @@ function GeneratedSets() {
   const [difficulty, setDifficulty] = useState('same');
   const [numProblems, setNumProblems] = useState(5);
   const [progress, setProgress] = useState('');
+  const [generationStarted, setGenerationStarted] = useState(false);
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -83,10 +86,22 @@ function GeneratedSets() {
       axios.get(`/api/problem-sets/${problemSetId}/generated`).then((res) => res.data),
   });
 
+  const handleClose = () => {
+    setOpen(false);
+    setGenerationStarted(false);
+    setProgress('');
+    generateSet.reset();
+  };
+
+  const handleGenerate = () => {
+    setGenerationStarted(true);
+    setProgress('');
+    generateSet.mutate();
+  };
+
   const generateSet = useMutation({
     mutationFn: async () => {
       try {
-        setProgress('Starting generation...');
         const data = {
           provider,
           difficulty,
@@ -101,37 +116,21 @@ function GeneratedSets() {
         throw error;
       }
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries(['generatedSets', problemSetId]);
-      setOpen(false);
-      setProgress('');
-    },
     onError: (error) => {
       console.error('Generation failed:', error);
       setProgress('');
     },
   });
 
-  const handleDownload = async (setId, type) => {
+  const handleDownload = async (type, setId) => {
     try {
-      const response = await axios.get(
+      await downloadService.downloadFile(
         `/api/generated-sets/${setId}/download?type=${type}`,
-        { responseType: 'blob' }
+        `${type}.pdf`
       );
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `${type}_${setId}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
     } catch (error) {
       console.error('Download failed:', error);
     }
-  };
-
-  const handleGenerate = () => {
-    generateSet.mutate();
   };
 
   if (isLoading) {
@@ -181,14 +180,14 @@ function GeneratedSets() {
               />
               <ListItemSecondaryAction>
                 <Button 
-                  href={`/api/generated-sets/${set.id}/download?type=problems`}
+                  onClick={() => handleDownload('problems', set.id)}
                   color="primary"
                   sx={{ mr: 1 }}
                 >
                   Problems
                 </Button>
                 <Button 
-                  href={`/api/generated-sets/${set.id}/download?type=solutions`}
+                  onClick={() => handleDownload('solutions', set.id)}
                   color="secondary"
                 >
                   Solutions
@@ -200,7 +199,7 @@ function GeneratedSets() {
       </Box>
 
       {/* Generation Dialog */}
-      <Dialog open={open} onClose={() => !generateSet.isLoading && setOpen(false)}>
+      <Dialog open={open} onClose={handleClose}>
         <DialogTitle>Generate New Problem Set</DialogTitle>
         <DialogContent>
           <DialogContentText>
@@ -208,14 +207,22 @@ function GeneratedSets() {
           </DialogContentText>
           <FormControl fullWidth margin="normal">
             <InputLabel>Provider</InputLabel>
-            <Select value={provider} onChange={(e) => setProvider(e.target.value)}>
+            <Select 
+              value={provider} 
+              onChange={(e) => setProvider(e.target.value)}
+              disabled={generationStarted}
+            >
               <MenuItem value="claude">Claude</MenuItem>
               <MenuItem value="gemini">Gemini</MenuItem>
             </Select>
           </FormControl>
           <FormControl fullWidth margin="normal">
             <InputLabel>Difficulty</InputLabel>
-            <Select value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
+            <Select 
+              value={difficulty} 
+              onChange={(e) => setDifficulty(e.target.value)}
+              disabled={generationStarted}
+            >
               <MenuItem value="same">Same</MenuItem>
               <MenuItem value="challenge">Challenge</MenuItem>
               <MenuItem value="harder">Harder</MenuItem>
@@ -228,16 +235,44 @@ function GeneratedSets() {
               value={numProblems}
               onChange={(e) => setNumProblems(parseInt(e.target.value))}
               inputProps={{ min: 1, max: 20 }}
+              disabled={generationStarted}
             />
           </FormControl>
-          {(generateSet.isLoading || progress) && (
-            <Box sx={{ mt: 2 }}>
+          
+          {generationStarted && (
+            <Box sx={{ mt: 3, mb: 2 }}>
               <LinearProgress />
               <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                {progress || 'Preparing...'}
+                {progress || 'Starting generation...'}
               </Typography>
             </Box>
           )}
+
+          {generateSet.isSuccess && (
+            <Box sx={{ mt: 3 }}>
+              <Typography variant="h6" color="success.main" sx={{ mb: 2 }}>
+                Generation Complete! 🎉
+              </Typography>
+              <Stack direction="row" spacing={2}>
+                <Button
+                  variant="contained"
+                  onClick={() => handleDownload('problems', generateSet.data.id)}
+                  startIcon={<DownloadIcon />}
+                >
+                  Problems PDF
+                </Button>
+                <Button
+                  variant="contained"
+                  color="secondary"
+                  onClick={() => handleDownload('solutions', generateSet.data.id)}
+                  startIcon={<DownloadIcon />}
+                >
+                  Solutions PDF
+                </Button>
+              </Stack>
+            </Box>
+          )}
+
           {generateSet.isError && (
             <Typography color="error" sx={{ mt: 2 }}>
               Error: {generateSet.error?.response?.data?.error || 'Failed to generate problems'}
@@ -245,16 +280,21 @@ function GeneratedSets() {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpen(false)} disabled={generateSet.isLoading}>
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            onClick={handleGenerate}
+          <Button 
+            onClick={handleClose}
             disabled={generateSet.isLoading}
           >
-            {generateSet.isLoading ? 'Generating...' : 'Generate'}
+            {generateSet.isSuccess ? 'Close' : 'Cancel'}
           </Button>
+          {!generationStarted && (
+            <Button
+              variant="contained"
+              onClick={handleGenerate}
+              disabled={generateSet.isLoading}
+            >
+              Generate
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
     </>
