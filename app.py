@@ -199,10 +199,9 @@ def create_problem_set():
                 
                 # Extract LaTeX from PDF
                 app.logger.info("Extracting LaTeX from PDF")
-                generator = ProblemGenerator(ClaudeProvider())  # Use Claude for better LaTeX conversion
-                latex_template = generator.extract_latex_from_pdf(filepath)
+                from math_latex import MathLatexConverter
+                latex_template = MathLatexConverter(ClaudeProvider()).convert_to_latex(filepath)
                 app.logger.info("LaTeX template extracted successfully")
-                
                 name = request.form.get('name', file.filename.replace('.pdf', ''))
                 app.logger.info(f"Using name: {name}")
                 

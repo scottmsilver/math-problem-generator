@@ -13,7 +13,7 @@ from utils.logger import setup_logging
 console = Console()
 
 class MathLatexConverter:
-    def __init__(self, provider, log_dir: str):
+    def __init__(self, provider, log_dir: str = 'logs'):
         self.provider = provider
         self.log_dir = log_dir
         self.logger = setup_logging(log_dir)

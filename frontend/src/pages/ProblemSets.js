@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -17,12 +17,21 @@ import {
   CircularProgress,
   Tabs,
   Tab,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemSecondaryAction,
+  IconButton,
+  Snackbar,
 } from '@mui/material';
 import { Add as AddIcon, Upload as UploadIcon } from '@mui/icons-material';
 import { useDropzone } from 'react-dropzone';
 import axios from '../utils/axios';
+import { formatDistanceToNow } from 'date-fns';
+import { useSnackbar } from 'notistack';
 
 function ProblemSets() {
+  const { enqueueSnackbar } = useSnackbar();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [template, setTemplate] = useState('');
@@ -34,8 +43,12 @@ function ProblemSets() {
   const queryClient = useQueryClient();
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    accept: { 'application/pdf': ['.pdf'] },
+    accept: '.pdf',
     onDrop: (files) => {
+      if(files[0].type !== 'application/pdf') {
+        enqueueSnackbar('Only PDF files supported', { variant: 'error' });
+        return;
+      }
       const file = files[0];
       setSelectedFile(file);
       if (!name) {
@@ -154,6 +167,10 @@ function ProblemSets() {
     }
   };
 
+  const handleNavigate = (id) => {
+    navigate(`/problem-sets/${id}/generated`);
+  };
+
   if (isLoading) {
     return <Typography>Loading...</Typography>;
   }
@@ -171,31 +188,34 @@ function ProblemSets() {
         </Button>
       </Box>
 
-      <Grid container spacing={3}>
-        {problemSets?.map((set) => (
-          <Grid item xs={12} sm={6} md={4} key={set.id}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6">{set.name}</Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Created: {new Date(set.created_at).toLocaleDateString()}
-                </Typography>
-                <Typography variant="body2">
-                  Generated Sets: {set.generated_sets_count}
-                </Typography>
-              </CardContent>
-              <CardActions>
-                <Button
-                  size="small"
-                  onClick={() => navigate(`/problem-sets/${set.id}/generated`)}
-                >
-                  View Generated Sets
-                </Button>
-              </CardActions>
-            </Card>
-          </Grid>
-        ))}
-      </Grid>
+      <Box sx={{ mt: 3 }}>
+        <List>
+          {problemSets?.map((set) => (
+            <ListItem 
+              key={set.id}
+              divider
+              sx={{ 
+                backgroundColor: 'background.paper',
+                borderRadius: 1,
+                mb: 1,
+                '&:hover': {
+                  backgroundColor: 'action.hover',
+                }
+              }}
+            >
+              <ListItemText
+                primary={set.name}
+                secondary={`Created ${formatDistanceToNow(new Date(set.created_at))} • ${set.generated_sets_count} generated sets`}
+              />
+              <ListItemSecondaryAction>
+                <IconButton edge="end" onClick={() => handleNavigate(set.id)}>
+                  <AddIcon />
+                </IconButton>
+              </ListItemSecondaryAction>
+            </ListItem>
+          ))}
+        </List>
+      </Box>
 
       <Dialog open={open} onClose={() => setOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Create New Problem Set</DialogTitle>
