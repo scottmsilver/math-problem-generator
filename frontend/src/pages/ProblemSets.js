@@ -18,7 +18,7 @@ import {
   Tabs,
   Tab,
   List,
-  ListItem,
+  ListItemButton,
   ListItemText,
   ListItemSecondaryAction,
   IconButton,
@@ -168,7 +168,9 @@ function ProblemSets() {
   };
 
   const handleNavigate = (id) => {
-    navigate(`/problem-sets/${id}/generated`);
+    navigate(`/problem-sets/${id}/generated`, {
+      state: { problemSetId: id }
+    });
   };
 
   if (isLoading) {
@@ -191,28 +193,25 @@ function ProblemSets() {
       <Box sx={{ mt: 3 }}>
         <List>
           {problemSets?.map((set) => (
-            <ListItem 
+            <ListItemButton
               key={set.id}
-              divider
-              sx={{ 
-                backgroundColor: 'background.paper',
+              onClick={() => handleNavigate(set.id)}
+              sx={{
+                mb: 2,
                 borderRadius: 1,
-                mb: 1,
+                boxShadow: 1,
+                bgcolor: 'background.paper',
                 '&:hover': {
-                  backgroundColor: 'action.hover',
-                }
+                  bgcolor: 'action.hover',
+                  cursor: 'pointer',
+                },
               }}
             >
               <ListItemText
                 primary={set.name}
                 secondary={`Created ${formatDistanceToNow(new Date(set.created_at))} • ${set.generated_sets_count} generated sets`}
               />
-              <ListItemSecondaryAction>
-                <IconButton edge="end" onClick={() => handleNavigate(set.id)}>
-                  <AddIcon />
-                </IconButton>
-              </ListItemSecondaryAction>
-            </ListItem>
+            </ListItemButton>
           ))}
         </List>
       </Box>

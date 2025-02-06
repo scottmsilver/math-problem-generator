@@ -34,7 +34,18 @@ function Layout() {
           >
             <MenuIcon />
           </IconButton>
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+          <Typography 
+            variant="h6" 
+            component="div" 
+            sx={{ 
+              flexGrow: 1, 
+              cursor: 'pointer',
+              '&:hover': {
+                opacity: 0.8
+              }
+            }}
+            onClick={() => navigate('/')}
+          >
             Math Problem Generator
           </Typography>
           <Button
@@ -63,7 +74,7 @@ function Layout() {
       >
         <Container maxWidth="sm">
           <Typography variant="body2" color="text.secondary" align="center">
-            © {new Date().getFullYear()} Math Problem Generator
+            {new Date().getFullYear()} Math Problem Generator
           </Typography>
         </Container>
       </Box>
