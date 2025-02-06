@@ -57,7 +57,7 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 # Progress queue for SSE
 progress_queues = {}
 
-def send_progress(user_id: int, message: str):
+def send_progress(user_id: int, message: str, progress: int = None):
     """Send a progress message to the user's queue."""
     app.logger.info(f"Sending progress for user {user_id}: {message}")
     if user_id not in progress_queues:
@@ -65,7 +65,8 @@ def send_progress(user_id: int, message: str):
         progress_queues[user_id] = queue.Queue()
     progress_queues[user_id].put({
         'type': 'progress',
-        'message': message
+        'message': message,
+        'progress': progress
     })
 
 @app.route('/api/events')
@@ -180,7 +181,7 @@ def create_problem_set():
             app.logger.info("Processing file upload")
             file = request.files['file']
             app.logger.info(f"Received file: {file.filename}")
-            send_progress(user_id, "Starting file upload...")
+            send_progress(user_id, "Starting file upload...", progress=0)
             
             if file.filename == '':
                 app.logger.warning("No file selected")
@@ -193,26 +194,55 @@ def create_problem_set():
             try:
                 # Save the uploaded file
                 app.logger.info("Saving uploaded file...")
-                send_progress(user_id, "Saving uploaded file...")
+                send_progress(user_id, "Saving uploaded file...", progress=20)
+                
+                # Create upload directory if it doesn't exist
+                os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+                
                 filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{file.filename}"
                 filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
                 app.logger.info(f"Saving file to: {filepath}")
-                file.save(filepath)
+                
+                # Read file in chunks to track progress
+                total_size = 0
+                chunk_size = 8192  # 8KB chunks
+                
+                # First get total size
+                file.seek(0, 2)  # Seek to end
+                total_size = file.tell()
+                file.seek(0)  # Reset to beginning
+                
+                bytes_read = 0
+                with open(filepath, 'wb') as f:
+                    while True:
+                        chunk = file.read(chunk_size)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        bytes_read += len(chunk)
+                        progress = min(40, 20 + int((bytes_read / total_size) * 20))
+                        send_progress(user_id, f"Uploading file... ({bytes_read}/{total_size} bytes)", progress=progress)
+                
                 app.logger.info("File saved successfully")
-                send_progress(user_id, "File saved successfully")
+                send_progress(user_id, "File saved successfully", progress=40)
                 
                 # Extract LaTeX from PDF
                 app.logger.info("Extracting LaTeX from PDF")
-                send_progress(user_id, "Extracting LaTeX from PDF...")
+                send_progress(user_id, "Extracting LaTeX from PDF...", progress=50)
+                
                 from math_latex import MathLatexConverter
-                latex_template = MathLatexConverter(ClaudeProvider()).convert_to_latex(filepath)
+                send_progress(user_id, "Initializing LaTeX converter...", progress=60)
+                
+                latex_converter = MathLatexConverter(ClaudeProvider())
+                send_progress(user_id, "Converting PDF to LaTeX...", progress=70)
+                
+                latex_template = latex_converter.convert_to_latex(filepath)
                 app.logger.info("LaTeX template extracted successfully")
-                send_progress(user_id, "LaTeX extracted successfully")
+                send_progress(user_id, "LaTeX extracted successfully", progress=80)
+                
                 name = request.form.get('name', file.filename.replace('.pdf', ''))
                 app.logger.info(f"Using name: {name}")
-                
-                if not name or not isinstance(name, str):
-                    return jsonify({'error': 'Name must be a string'}), 422
+                send_progress(user_id, "Creating problem set entry...", progress=90)
                 
                 problem_set = ProblemSet(
                     user_id=user_id,
@@ -245,11 +275,11 @@ def create_problem_set():
             )
         
         try:
-            send_progress(user_id, "Creating problem set...")
+            send_progress(user_id, "Saving to database...", progress=95)
             db.session.add(problem_set)
             db.session.commit()
             app.logger.info(f"Problem set created with ID: {problem_set.id}")
-            send_progress(user_id, "Problem set created successfully!")
+            send_progress(user_id, "Problem set created successfully!", progress=100)
             
             return jsonify({
                 'id': problem_set.id,

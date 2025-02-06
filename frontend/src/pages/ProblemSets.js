@@ -36,6 +36,7 @@ function ProblemSets() {
   const [name, setName] = useState('');
   const [template, setTemplate] = useState('');
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [processingProgress, setProcessingProgress] = useState(0);
   const [inputMethod, setInputMethod] = useState('pdf');
   const [selectedFile, setSelectedFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -68,6 +69,22 @@ function ProblemSets() {
         if (message.type === 'progress') {
           console.log('Setting progress message:', message.message);
           setProgress(message.message);
+          
+          if (message.progress !== null) {
+            if (message.progress <= 40) {
+              // During file upload
+              setUploadProgress(message.progress);
+            } else {
+              // After file upload
+              setUploadProgress(100);
+              setProcessingProgress(message.progress);
+            }
+
+            // When everything is done
+            if (message.progress === 100) {
+              setIsUploading(false);
+            }
+          }
         }
       } catch (error) {
         console.error('Error parsing SSE message:', error);
@@ -302,7 +319,11 @@ function ProblemSets() {
                 {isUploading ? (
                   <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                     <Box sx={{ position: 'relative', display: 'inline-flex', mb: 2 }}>
-                      <CircularProgress variant="determinate" value={uploadProgress} size={60} />
+                      <CircularProgress 
+                        variant="determinate" 
+                        value={uploadProgress === 100 ? processingProgress : uploadProgress} 
+                        size={60} 
+                      />
                       <Box
                         sx={{
                           top: 0,
@@ -316,11 +337,13 @@ function ProblemSets() {
                         }}
                       >
                         <Typography variant="caption" component="div" color="text.secondary">
-                          {`${Math.round(uploadProgress)}%`}
+                          {`${Math.round(uploadProgress === 100 ? processingProgress : uploadProgress)}%`}
                         </Typography>
                       </Box>
                     </Box>
-                    <Typography>Uploading {selectedFile?.name}...</Typography>
+                    <Typography>
+                      {uploadProgress === 100 ? 'Processing...' : `Uploading ${selectedFile?.name}...`}
+                    </Typography>
                     {progress && (
                       <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                         {progress}
