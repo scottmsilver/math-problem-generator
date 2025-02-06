@@ -39,8 +39,51 @@ function ProblemSets() {
   const [inputMethod, setInputMethod] = useState('pdf');
   const [selectedFile, setSelectedFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [progress, setProgress] = useState('');
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      console.error('No token found');
+      return;
+    }
+
+    const eventSource = new EventSource(`http://localhost:8081/api/events?token=${token}`, {
+      withCredentials: true
+    });
+
+    eventSource.onopen = () => {
+      console.log('SSE connection opened');
+    };
+
+    eventSource.onmessage = (event) => {
+      try {
+        console.log('Raw SSE event:', event);
+        console.log('Raw SSE data:', event.data);
+        const message = JSON.parse(event.data);
+        console.log('Parsed SSE message:', message);
+
+        if (message.type === 'progress') {
+          console.log('Setting progress message:', message.message);
+          setProgress(message.message);
+        }
+      } catch (error) {
+        console.error('Error parsing SSE message:', error);
+      }
+    };
+
+    eventSource.onerror = (error) => {
+      console.error('SSE error:', error);
+      eventSource.close();
+    };
+
+    return () => {
+      console.log('Closing SSE connection');
+      eventSource.close();
+    };
+  }, []);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     accept: '.pdf',
@@ -278,6 +321,11 @@ function ProblemSets() {
                       </Box>
                     </Box>
                     <Typography>Uploading {selectedFile?.name}...</Typography>
+                    {progress && (
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                        {progress}
+                      </Typography>
+                    )}
                   </Box>
                 ) : (
                   <>

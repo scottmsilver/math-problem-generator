@@ -180,6 +180,7 @@ def create_problem_set():
             app.logger.info("Processing file upload")
             file = request.files['file']
             app.logger.info(f"Received file: {file.filename}")
+            send_progress(user_id, "Starting file upload...")
             
             if file.filename == '':
                 app.logger.warning("No file selected")
@@ -191,17 +192,22 @@ def create_problem_set():
             
             try:
                 # Save the uploaded file
+                app.logger.info("Saving uploaded file...")
+                send_progress(user_id, "Saving uploaded file...")
                 filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{file.filename}"
                 filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
                 app.logger.info(f"Saving file to: {filepath}")
                 file.save(filepath)
                 app.logger.info("File saved successfully")
+                send_progress(user_id, "File saved successfully")
                 
                 # Extract LaTeX from PDF
                 app.logger.info("Extracting LaTeX from PDF")
+                send_progress(user_id, "Extracting LaTeX from PDF...")
                 from math_latex import MathLatexConverter
                 latex_template = MathLatexConverter(ClaudeProvider()).convert_to_latex(filepath)
                 app.logger.info("LaTeX template extracted successfully")
+                send_progress(user_id, "LaTeX extracted successfully")
                 name = request.form.get('name', file.filename.replace('.pdf', ''))
                 app.logger.info(f"Using name: {name}")
                 
@@ -239,9 +245,11 @@ def create_problem_set():
             )
         
         try:
+            send_progress(user_id, "Creating problem set...")
             db.session.add(problem_set)
             db.session.commit()
             app.logger.info(f"Problem set created with ID: {problem_set.id}")
+            send_progress(user_id, "Problem set created successfully!")
             
             return jsonify({
                 'id': problem_set.id,
